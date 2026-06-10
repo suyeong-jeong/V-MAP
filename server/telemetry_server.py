@@ -128,6 +128,13 @@ class ClientHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # 콘솔 소음 줄이기
         pass
 
+
+    def do_HEAD(self):
+        # 모니터링 서비스(HEAD 요청) 대응 — UptimeRobot 등
+        self.send_response(200)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     # ---------- GET ----------
     def do_GET(self):
         path = urlparse(self.path).path
