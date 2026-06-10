@@ -19,7 +19,8 @@ python3 telemetry_server.py 8000
 ```
 
 브라우저에서 `http://localhost:8000` 접속.
-(과제 채점용 공개 서버를 여는 경우 같은 명령을 공인 IP 서버에서 실행 — 6/25까지 오픈)
+
+**공개 서버**: https://v-map-agah.onrender.com (6/25까지 가동 — 별도 설치 없이 바로 접속 가능)
 
 ### 기본 계정
 | ID | PW | 권한 |
