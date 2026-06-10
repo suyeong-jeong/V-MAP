@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V-MAP — Vehicle Monitoring &amp; Analysis Platform</title>
+<style>
+/* ============ 토큰 ============
+   palette: ink #11151C / panel #1A2029 / line #2A323E
+            amber #F5A623 / cyan #6FD3E7 / red #FF4D4F / green #39D98A
+            text #E8EBF0 / muted #7C8694                                  */
+:root{
+  --ink:#11151C; --panel:#1A2029; --panel2:#151A22; --line:#2A323E;
+  --amber:#F5A623; --cyan:#6FD3E7; --red:#FF4D4F; --green:#39D98A;
+  --text:#E8EBF0; --muted:#7C8694;
+  --mono:ui-monospace,'Cascadia Mono','JetBrains Mono',Consolas,monospace;
+  --disp:'Arial Narrow','Helvetica Neue',Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--ink);color:var(--text);font:14px/1.5 var(--disp);min-height:100vh}
+button{font-family:inherit;cursor:pointer}
+input,select{font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);
+  color:var(--text);padding:7px 10px;border-radius:4px;font-size:13px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+h2{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+   font-weight:700;margin-bottom:10px}
+.hidden{display:none!important}
+
+/* ============ 로그인 ============ */
+#loginView{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-card{width:330px;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:34px 30px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.brand{font-family:var(--disp);font-weight:700;font-size:34px;letter-spacing:.14em}
+.brand b{color:var(--amber)}
+.brand-sub{font-size:11px;letter-spacing:.22em;color:var(--muted);margin:4px 0 26px}
+.login-card label{display:block;font-size:11px;letter-spacing:.12em;color:var(--muted);margin:14px 0 5px}
+.login-card input,.login-card select{width:100%}
+.pw-wrap{position:relative}
+.pw-wrap button{position:absolute;right:6px;top:5px;background:none;border:none;color:var(--muted);font-size:12px}
+.btn-primary{width:100%;margin-top:22px;padding:11px;border:none;border-radius:4px;
+  background:var(--amber);color:#181208;font-weight:700;letter-spacing:.22em;font-size:14px}
+.btn-primary:hover{filter:brightness(1.08)}
+.login-msg{min-height:18px;margin-top:12px;font-size:12px;color:var(--red);font-family:var(--mono)}
+.login-foot{margin-top:16px;font-size:12px;color:var(--muted);text-align:center}
+.login-foot a{color:var(--cyan);cursor:pointer;text-decoration:underline}
+
+/* ============ 상단 바 ============ */
+#topbar{display:flex;align-items:center;gap:14px;padding:10px 18px;
+  background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+#topbar .brand{font-size:20px}
+.tag{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:3px;
+  border:1px solid var(--line);color:var(--muted);letter-spacing:.06em}
+.tag.ok{color:var(--green);border-color:var(--green)}
+.tag.bad{color:var(--red);border-color:var(--red)}
+.tag.warn{color:var(--amber);border-color:var(--amber)}
+.tag.rec{color:#fff;background:var(--red);border-color:var(--red);animation:blink 1.1s infinite}
+@keyframes blink{50%{opacity:.45}}
+#topbar .spacer{flex:1}
+.btn-ghost{background:none;border:1px solid var(--line);color:var(--muted);
+  border-radius:4px;padding:6px 12px;font-size:12px;letter-spacing:.08em}
+.btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+
+/* ============ 탭/레이아웃 ============ */
+#tabs{display:flex;gap:2px;padding:0 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+#tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);
+  padding:10px 16px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+#tabs button.active{color:var(--amber);border-bottom-color:var(--amber)}
+main{padding:18px;max-width:1280px;margin:0 auto}
+.grid{display:grid;gap:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
+.kv{display:flex;justify-content:space-between;font-family:var(--mono);font-size:13px;
+    padding:5px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:none}
+.kv b{color:var(--cyan);font-weight:400}
+
+/* ============ 대시보드 ============ */
+#dashGrid{grid-template-columns:1fr 1fr 220px}
+@media(max-width:900px){#dashGrid{grid-template-columns:1fr}}
+.gauge-wrap{text-align:center}
+.gauge-wrap canvas{max-width:100%}
+.soc-col{display:flex;flex-direction:column;align-items:center;gap:8px}
+#socBarWrap{width:64px;height:230px;border:1px solid var(--line);border-radius:5px;
+  position:relative;background:var(--panel2);overflow:hidden}
+#socBar{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,var(--green),#1f7a4e);
+  transition:height .25s}
+#socPct{font-family:var(--mono);font-size:26px}
+.statline{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.lamp{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:3px;
+  border:1px solid var(--line);color:var(--muted)}
+.lamp.on{color:#1c1c10;background:var(--amber);border-color:var(--amber);font-weight:700}
+
+/* ============ 경고 팝업 (UC08) ============ */
+#alertPopup{position:fixed;top:74px;left:50%;transform:translateX(-50%);z-index:200;
+  background:#3a1418;border:1px solid var(--red);border-left:6px solid var(--red);
+  border-radius:6px;padding:14px 20px;min-width:340px;box-shadow:0 14px 40px rgba(0,0,0,.6)}
+#alertPopup h3{color:var(--red);font-size:13px;letter-spacing:.18em;margin-bottom:6px}
+#alertPopup ul{list-style:none;font-family:var(--mono);font-size:13px}
+#alertPopup li{padding:2px 0}
+#alertPopup button{margin-top:10px;background:var(--red);border:none;color:#fff;
+  border-radius:4px;padding:6px 16px;font-weight:700}
+.flash-red{animation:flashr .6s infinite}
+@keyframes flashr{50%{color:var(--red)}}
+
+/* ============ 텔레메트리 ============ */
+#telGrid{grid-template-columns:1fr 360px}
+@media(max-width:980px){#telGrid{grid-template-columns:1fr}}
+canvas.chart{width:100%;height:150px;background:var(--panel2);border:1px solid var(--line);border-radius:5px}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+th{color:var(--muted);text-align:left;font-weight:400;letter-spacing:.1em;font-size:11px;
+   border-bottom:1px solid var(--line);padding:6px 8px}
+td{padding:6px 8px;border-bottom:1px dashed var(--line)}
+td.ok{color:var(--green)} td.bad{color:var(--red)} td.warn{color:var(--amber)}
+
+/* ============ 제어 패널 ============ */
+#ctrlGrid{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){#ctrlGrid{grid-template-columns:repeat(2,1fr)}}
+.ctl-btn{padding:18px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--text);font-size:13px;letter-spacing:.1em;font-weight:700}
+.ctl-btn:hover{border-color:var(--muted)}
+.ctl-btn.active{border-color:var(--amber);color:var(--amber)}
+.ctl-btn.danger{border-color:var(--red);color:var(--red);font-size:15px}
+.ctl-btn.danger:hover{background:var(--red);color:#fff}
+.slider-row{display:grid;grid-template-columns:170px 1fr 86px;gap:12px;align-items:center;
+  padding:9px 0;border-bottom:1px dashed var(--line);font-family:var(--mono);font-size:12px}
+.slider-row:last-child{border-bottom:none}
+.slider-row input[type=range]{width:100%;accent-color:var(--amber)}
+.slider-row input[type=number]{width:86px;padding:4px 6px}
+.note{font-size:12px;color:var(--muted);margin-top:8px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel);
+  border:1px solid var(--green);color:var(--green);padding:10px 22px;border-radius:6px;
+  font-family:var(--mono);font-size:13px;z-index:300}
+
+/* ============ 로그 ============ */
+.log-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px dashed var(--line);
+  font-family:var(--mono);font-size:12px}
+.log-row .name{flex:1}
+.mini{padding:4px 10px;font-size:11px;border-radius:3px;border:1px solid var(--line);
+  background:none;color:var(--cyan)}
+.mini:hover{border-color:var(--cyan)}
+#pbBar{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;margin-top:10px}
+#pbBar input[type=range]{flex:1;accent-color:var(--cyan)}
+#playbackBanner{position:fixed;top:0;left:0;right:0;z-index:120;text-align:center;
+  background:var(--cyan);color:#06222a;font-weight:700;letter-spacing:.3em;font-size:12px;padding:4px}
+#connLost{position:fixed;inset:0;background:rgba(10,12,16,.72);z-index:400;display:flex;
+  align-items:center;justify-content:center}
+#connLost .panel{border-color:var(--red);text-align:center;padding:30px 44px}
+#connLost h3{color:var(--red);letter-spacing:.2em;margin-bottom:8px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ================= UC01: Login ================= -->
+<div id="loginView">
+  <div class="login-card">
+    <div class="brand">V-<b>MAP</b></div>
+    <div class="brand-sub">VEHICLE MONITORING &amp; ANALYSIS PLATFORM</div>
+    <div id="regFields" class="hidden">
+      <label>ROLE</label>
+      <select id="regRole"><option value="driver">Driver</option><option value="engineer">Engineer</option></select>
+    </div>
+    <label>STUDENT ID</label>
+    <input id="loginId" autocomplete="username" placeholder="engineer">
+    <label>PASSWORD</label>
+    <div class="pw-wrap">
+      <input id="loginPw" type="password" autocomplete="current-password" placeholder="1234">
+      <button id="pwToggle" type="button" aria-label="비밀번호 표시">표시</button>
+    </div>
+    <button class="btn-primary" id="loginBtn">LOGIN</button>
+    <div class="login-msg" id="loginMsg"></div>
+    <div class="login-foot">신규 사용자인가요? <a id="regLink">Register here</a></div>
+  </div>
+</div>
+
+<!-- ================= 메인 ================= -->
+<div id="appView" class="hidden">
+  <div id="playbackBanner" class="hidden">PLAYBACK MODE — 과거 주행 데이터 재생 중</div>
+  <header id="topbar">
+    <div class="brand">V-<b>MAP</b></div>
+    <span class="tag" id="stState">STATE: --</span>
+    <span class="tag" id="stLatency">RTT: -- ms</span>
+    <span class="tag hidden rec" id="stRec">● REC</span>
+    <div class="spacer"></div>
+    <span class="tag" id="stUser">--</span>
+    <button class="btn-ghost" id="logoutBtn">LOGOUT</button>
+  </header>
+  <nav id="tabs"></nav>
+  <main>
+
+  <!-- ===== UC02: Driver Dashboard ===== -->
+  <section id="view-dashboard" class="grid" style="grid-template-columns:1fr">
+    <div class="grid" id="dashGrid">
+      <div class="panel gauge-wrap"><h2>Speed</h2><canvas id="gSpeed" width="320" height="260"></canvas></div>
+      <div class="panel gauge-wrap"><h2>Motor RPM</h2><canvas id="gRpm" width="320" height="260"></canvas></div>
+      <div class="panel soc-col"><h2>Battery SOC</h2>
+        <div id="socBarWrap"><div id="socBar" style="height:0%"></div></div>
+        <div id="socPct">--%</div>
+        <div class="statline">
+          <span class="lamp" id="lampMode">NORMAL</span>
+          <span class="lamp" id="lampHead">LOW</span>
+          <span class="lamp" id="lampHigh">HIGH</span>
+          <span class="lamp" id="lampHaz">HAZ</span>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Drive Status</h2>
+      <div class="grid" style="grid-template-columns:repeat(4,1fr)" id="dashKv"></div>
+    </div>
+  </section>
+
+  <!-- ===== UC04: Telemetry (Engineer) ===== -->
+  <section id="view-telemetry" class="grid hidden" id2="telWrap" style="grid-template-columns:1fr">
+    <div class="grid" id="telGrid">
+      <div class="panel">
+        <h2>Realtime Charts</h2>
+        <canvas class="chart" id="chVolt"></canvas>
+        <canvas class="chart" id="chCurr" style="margin-top:10px"></canvas>
+        <canvas class="chart" id="chTemp" style="margin-top:10px"></canvas>
+      </div>
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2 style="margin-bottom:0">Data Table</h2>
+          <button class="mini" id="logToggleBtn">LOG START</button>
+        </div>
+        <table style="margin-top:10px">
+          <thead><tr><th>DEVICE</th><th>VALUE</th><th>STATUS</th></tr></thead>
+          <tbody id="telTable"></tbody>
+        </table>
+        <h2 style="margin-top:18px">Efficiency (UC10)</h2>
+        <div id="effBox"></div>
+        <h2 style="margin-top:18px">Raw CAN Frame</h2>
+        <div id="rawFrame" style="font-family:var(--mono);font-size:11px;word-break:break-all;color:var(--muted)"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== UC09: Battery Analysis ===== -->
+  <section id="view-battery" class="grid hidden" style="grid-template-columns:1fr">
+    <div class="panel">
+      <h2>Battery Cell Voltages — 12 Cells</h2>
+      <canvas id="chCells" class="chart" style="height:230px"></canvas>
+      <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:12px" id="cellKv"></div>
+    </div>
+  </section>
+
+  <!-- ===== UC05/11/12: Control Panel ===== -->
+  <section id="view-control" class="grid hidden" style="grid-template-columns:1fr">
+    <div class="panel">
+      <h2>Remote Commands (UC05)</h2>
+      <div class="grid" id="ctrlGrid">
+        <button class="ctl-btn danger" id="btnEstop">⛔ EMERGENCY STOP</button>
+        <button class="ctl-btn" id="btnReset">RESET</button>
+        <button class="ctl-btn" id="btnModeN" data-mode="0">MODE: NORMAL</button>
+        <button class="ctl-btn" id="btnModeE" data-mode="1">MODE: ECO</button>
+        <button class="ctl-btn" id="btnModeS" data-mode="2">MODE: SPORT</button>
+        <button class="ctl-btn" id="btnHead">HEADLAMP</button>
+        <button class="ctl-btn" id="btnHigh">HIGH BEAM</button>
+        <button class="ctl-btn" id="btnHaz">HAZARD</button>
+      </div>
+      <div class="slider-row" style="margin-top:14px">
+        <span>MANUAL THROTTLE</span>
+        <input type="range" id="thrSlider" min="0" max="100" value="0">
+        <button class="mini" id="thrAuto">AUTO</button>
+      </div>
+      <div class="slider-row">
+        <span>SCENARIO</span>
+        <select id="scenarioSel"></select>
+        <button class="mini" id="scenarioLoad">LOAD</button>
+      </div>
+      <div class="note" id="cmdNote"></div>
+    </div>
+    <div class="panel">
+      <h2>Threshold Adjust (UC11)</h2>
+      <div id="thrRows"></div>
+      <button class="btn-primary" style="width:auto;padding:9px 26px" id="thrSave">설정 저장</button>
+      <span class="note" id="thrMsg" style="margin-left:12px"></span>
+    </div>
+  </section>
+
+  <!-- ===== UC06/07/13: Logs ===== -->
+  <section id="view-logs" class="grid hidden" style="grid-template-columns:1fr">
+    <div class="panel">
+      <h2>Drive Logs (UC06)</h2>
+      <div id="logList"></div>
+    </div>
+    <div class="panel">
+      <h2>Playback (UC07)</h2>
+      <div class="note" id="pbInfo">재생할 로그 파일을 위 목록에서 선택하세요.</div>
+      <div id="pbBar" class="hidden">
+        <button class="mini" id="pbPlay">▶</button>
+        <select id="pbSpeed"><option value="1">1x</option><option value="2">2x</option><option value="4">4x</option></select>
+        <input type="range" id="pbSeek" min="0" max="100" value="0">
+        <span id="pbTime">0.0s</span>
+        <button class="mini" id="pbExit">종료</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Alert Log (UC08)</h2>
+      <table><thead><tr><th>TIME</th><th>SENSOR</th><th>VALUE</th><th>LIMIT</th></tr></thead>
+      <tbody id="alertLog"></tbody></table>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<!-- 경고 팝업 / 연결 끊김 오버레이 -->
+<div id="alertPopup" class="hidden" role="alert">
+  <h3>⚠ WARNING — 임계값 초과</h3><ul id="alertList"></ul>
+  <button id="alertAck">확인</button>
+</div>
+<div id="connLost" class="hidden">
+  <div class="panel"><h3>통신 연결 끊김</h3>
+  <div class="note">시뮬레이터와의 연결이 끊어졌습니다. 마지막 수신 데이터를 표시 중이며, 자동 재연결을 시도합니다.</div></div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   V-MAP Client — Analysis/Design 문서의 클래스 구조를 그대로 구현
+   VehicleState, BatteryCellData, ThresholdConfig, AlertController,
+   AnalysisEngine, TelemetryParser, SimulatorConnector, LogManager(C),
+   ReportExporter + View 계층
+===================================================================== */
+const $ = id => document.getElementById(id);
+const MODE_NAMES = ["NORMAL","ECO","SPORT"];
+const PACK_KWH = 5.2;
+
+/* ---------- Entity ---------- */
+class VehicleState {           // 차량의 현재 물리 상태
+  constructor(){ this.speed=0; this.rpm=0; this.batterySOC=0; this.voltage=0;
+    this.current=0; this.motorTemp=0; this.inverterTemp=0;
+    this.currentMode=0; this.lights=0; this.odometer=0; this.ts=0; }
+  updateState(p){ Object.assign(this,p); }
+  getSpeed(){ return this.speed; }
+  getRpm(){ return this.rpm; }
+}
+class BatteryCellData {        // 셀 전압/온도 + 편차 분석
+  constructor(){ this.cellVoltages=[]; this.cellTemp=0; this.maxVoltageDelta=0; }
+  updateCellData(volts,temp){ this.cellVoltages=volts; this.cellTemp=temp; this.calculateDelta(); }
+  calculateDelta(){
+    if(!this.cellVoltages.length) return 0;
+    const mx=Math.max(...this.cellVoltages), mn=Math.min(...this.cellVoltages);
+    this.maxVoltageDelta = mx-mn; return this.maxVoltageDelta;
+  }
+  getAbnormalCells(minMv, maxDelta){
+    const mx=Math.max(...this.cellVoltages);
+    return this.cellVoltages.map((v,i)=>({i,v}))
+      .filter(c=> c.v < minMv || (mx - c.v) > maxDelta).map(c=>c.i);
+  }
+}
+class ThresholdConfig {        // UC11 — 임계값 보관
+  constructor(){ this.values = {}; }
+  setAll(obj){ this.values = {...obj}; }
+  get(k){ return this.values[k]; }
+}
+
+/* ---------- TelemetryParser (UC02 step2 — Raw CAN 파싱) ---------- */
+class TelemetryParser {
+  static STX=0x02; static ETX=0x03;
+  static hexToBytes(h){ const a=new Uint8Array(h.length/2);
+    for(let i=0;i<a.length;i++) a[i]=parseInt(h.substr(i*2,2),16); return a; }
+  static validatePacket(b){   // 무결성 검증: STX/ETX + XOR 체크섬
+    if(b[0]!==this.STX || b[b.length-1]!==this.ETX) return null;
+    let chk=0; for(let i=1;i<b.length-2;i++) chk^=b[i];
+    if(chk!==b[b.length-2]) return null;
+    return {cmd:b[1], payload:b.slice(3,3+b[2])};
+  }
+  static parseCANPacket(hex){
+    const f=this.validatePacket(this.hexToBytes(hex));
+    if(!f) return null;
+    const dv=new DataView(f.payload.buffer,f.payload.byteOffset,f.payload.byteLength);
+    if(f.cmd===0x10){          // 텔레메트리
+      return {kind:"telemetry", speed:dv.getUint16(0)/10, rpm:dv.getUint16(2),
+        batterySOC:dv.getUint16(4)/10, voltage:dv.getUint16(6)/10,
+        current:dv.getInt16(8)/10, motorTemp:dv.getInt16(10)/10,
+        inverterTemp:dv.getInt16(12)/10, currentMode:dv.getUint8(14),
+        lights:dv.getUint8(15), odometer:dv.getUint32(16)};
+    }
+    if(f.cmd===0x11){          // 배터리 셀
+      const cells=[]; for(let i=0;i<12;i++) cells.push(dv.getUint16(i*2));
+      return {kind:"cells", cells, cellTemp:dv.getInt16(24)/10};
+    }
+    return null;
+  }
+  static sane(p){              // UC02 확장 2a — 설계 범위 밖 수치는 무시
+    return p.speed>=0 && p.speed<400 && p.rpm>=0 && p.rpm<25000 &&
+           p.batterySOC>=0 && p.batterySOC<=100 && p.voltage>0 && p.voltage<80;
+  }
+}
+
+/* ---------- SimulatorConnector (SSE 수신 + 재연결) ---------- */
+class SimulatorConnector {
+  constructor(onData,onState){ this.es=null; this.onData=onData; this.onState=onState;
+    this.isConnected=false; this._watchdog=null; this._lastMsg=0; }
+  connect(){
+    this.es=new EventSource("/api/stream");
+    this.es.onmessage = e=>{ this._lastMsg=Date.now();
+      if(!this.isConnected){this.isConnected=true;this.onState(true);}
+      this.onData(JSON.parse(e.data)); };
+    this.es.onerror = ()=>{ if(this.isConnected){this.isConnected=false;this.onState(false);} };
+    clearInterval(this._watchdog);
+    this._watchdog=setInterval(()=>{   // 데이터 유입 중단 감시 (UC02 확장 1a)
+      if(this.isConnected && Date.now()-this._lastMsg>3000){
+        this.isConnected=false; this.onState(false); }
+    },1000);
+  }
+  async sendCommand(cmd,value){        // UC05 — 명령 전송 (ACK 확인)
+    const r=await api("/api/command","POST",{cmd,value});
+    return r;
+  }
+}
+
+/* ---------- AnalysisEngine (UC10 — 전비/주행가능거리) ---------- */
+class AnalysisEngine {
+  constructor(){ this.currentEfficiency=0; this.estimatedRange=0;
+    this.energyKwh=0; this.startOdo=null; this.lastTs=null; this.avgPower=0; }
+  calculateEfficiency(s){
+    const power=s.voltage*s.current;                 // W
+    if(this.lastTs!==null){
+      const dt=Math.max(0,s.ts-this.lastTs);
+      this.energyKwh += power*dt/3.6e6;
+    }
+    this.lastTs=s.ts;
+    if(this.startOdo===null) this.startOdo=s.odometer;
+    const distKm=Math.max(0,(s.odometer-this.startOdo)/1000);
+    this.avgPower=this.avgPower*0.95+power*0.05;
+    this.currentEfficiency = this.energyKwh>1e-6 ? distKm/this.energyKwh : 0; // km/kWh
+    const remainKwh=s.batterySOC/100*PACK_KWH;
+    // 정차 중 분모 0 예외 처리 (UC10 확장 3a)
+    this.estimatedRange = this.currentEfficiency>0 ? remainKwh*this.currentEfficiency : 0;
+    return {distKm, power, eff:this.currentEfficiency, range:this.estimatedRange,
+            energy:this.energyKwh, idle: s.speed<0.5 && power>50};
+  }
+  analyzeCellBalance(cd,thr){
+    return {delta:cd.calculateDelta(),
+      abnormal:cd.getAbnormalCells(thr.get("minCellVoltage")??3050, thr.get("maxCellDelta")??60)};
+  }
+}
+
+/* ---------- AlertController (UC08 — 우선순위 기반 경고) ---------- */
+class AlertController {
+  constructor(thr){ this.alertThresholds=thr; this.activeAlerts=new Map(); this.history=[]; this.muted=new Set(); }
+  checkThresholds(s,cd){
+    const t=this.alertThresholds, found=[];
+    const add=(key,pri,label,val,lim,unit)=>found.push({key,pri,label,val:val.toFixed(1),lim,unit});
+    if(cd.cellTemp> (t.get("maxMotorTemp")??95)) add("battTemp",0,"배터리 온도",cd.cellTemp,t.get("maxMotorTemp"),"℃");
+    if(cd.cellVoltages.length && Math.min(...cd.cellVoltages) < t.get("minCellVoltage"))
+      add("cellV",1,"셀 저전압",Math.min(...cd.cellVoltages),t.get("minCellVoltage"),"mV");
+    if(cd.maxVoltageDelta > t.get("maxCellDelta")) add("cellD",1,"셀 편차",cd.maxVoltageDelta,t.get("maxCellDelta"),"mV");
+    if(s.motorTemp > t.get("maxMotorTemp")) add("mTemp",2,"모터 온도",s.motorTemp,t.get("maxMotorTemp"),"℃");
+    if(s.inverterTemp > t.get("maxInverterTemp")) add("iTemp",2,"인버터 온도",s.inverterTemp,t.get("maxInverterTemp"),"℃");
+    if(s.rpm > t.get("maxRpm")) add("rpm",3,"RPM 초과",s.rpm,t.get("maxRpm"),"rpm");
+    if(s.speed > t.get("maxSpeed")) add("speed",4,"속도 초과",s.speed,t.get("maxSpeed"),"km/h");
+    if(s.batterySOC < t.get("minSoc")) add("soc",5,"배터리 부족",s.batterySOC,t.get("minSoc"),"%");
+    found.sort((a,b)=>a.pri-b.pri);   // 확장 3a — 위험 우선순위 정렬
+    // 신규 발생 항목은 히스토리에 기록 (UC08 step4)
+    for(const f of found) if(!this.activeAlerts.has(f.key))
+      this.history.unshift({time:new Date().toLocaleTimeString(),...f});
+    // 정상 복귀한 항목은 mute 해제
+    for(const k of [...this.muted]) if(!found.some(f=>f.key===k)) this.muted.delete(k);
+    this.activeAlerts=new Map(found.map(f=>[f.key,f]));
+    return found.filter(f=>!this.muted.has(f.key));
+  }
+  acknowledge(){ for(const k of this.activeAlerts.keys()) this.muted.add(k); }
+}
+
+/* ---------- ReportExporter (UC13 — PDF 인쇄용 리포트 / CSV) ---------- */
+class ReportExporter {
+  static generatePDF(name,summary,rows){
+    const w=window.open("","_blank");
+    const tr=Object.entries(summary).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+    const pts=rows.filter((_,i)=>i%Math.ceil(rows.length/200||1)===0);
+    const maxS=Math.max(1,...pts.map(r=>+r.speed||0));
+    const poly=pts.map((r,i)=>`${(i/(pts.length-1||1)*760).toFixed(1)},${(150-(+r.speed||0)/maxS*140).toFixed(1)}`).join(" ");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>V-MAP Report</title>
+<style>body{font-family:sans-serif;padding:32px;color:#222}h1{letter-spacing:.1em}
+table{border-collapse:collapse;margin:16px 0}td{border:1px solid #999;padding:6px 14px;font-family:monospace}
+svg{border:1px solid #ccc}</style></head><body>
+<h1>V-MAP 주행 분석 보고서</h1><p>파일: ${name} · 생성: ${new Date().toLocaleString()}</p>
+<h3>주행 요약 통계</h3><table>${tr}</table>
+<h3>속도 프로파일 (최대 ${maxS.toFixed(1)} km/h)</h3>
+<svg width="760" height="150"><polyline points="${poly}" fill="none" stroke="#d2691e" stroke-width="2"/></svg>
+<p><button onclick="window.print()">PDF로 저장 / 인쇄</button></p></body></html>`);
+    w.document.close();
+  }
+  static downloadCSV(name,rows){
+    if(!rows.length) return;
+    const head=Object.keys(rows[0]).join(",");
+    const body=rows.map(r=>Object.values(r).join(",")).join("\n");
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([head+"\n"+body],{type:"text/csv"}));
+    a.download=name; a.click(); URL.revokeObjectURL(a.href);
+  }
+}
+
+/* ---------- 차트 (외부 라이브러리 없이 canvas 직접 렌더링) ---------- */
+class LineChart {
+  constructor(canvas,series,unit){ this.cv=canvas; this.series=series; this.unit=unit;
+    this.data=series.map(()=>[]); this.max=300; }
+  push(vals){ vals.forEach((v,i)=>{ this.data[i].push(v);
+    if(this.data[i].length>this.max) this.data[i].shift(); }); this.draw(); }
+  draw(){
+    const cv=this.cv, dpr=devicePixelRatio||1;
+    const W=cv.clientWidth, H=cv.clientHeight;
+    if(cv.width!==W*dpr){cv.width=W*dpr;cv.height=H*dpr;}
+    const ctx=cv.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+    const flat=this.data.flat(); if(!flat.length) return;
+    let mn=Math.min(...flat), mx=Math.max(...flat);
+    if(mx-mn<1e-6){mx+=1;mn-=1;} const pad=(mx-mn)*0.12; mn-=pad; mx+=pad;
+    ctx.strokeStyle="#242c38"; ctx.lineWidth=1;
+    for(let g=1;g<4;g++){const y=H*g/4; ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    this.data.forEach((arr,i)=>{
+      ctx.strokeStyle=this.series[i].color; ctx.lineWidth=1.6; ctx.beginPath();
+      arr.forEach((v,j)=>{const x=j/(this.max-1)*W, y=H-(v-mn)/(mx-mn)*H;
+        j?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+      ctx.stroke();
+    });
+    ctx.font="10px monospace"; ctx.fillStyle="#7C8694";
+    ctx.fillText(mx.toFixed(1)+this.unit,4,11); ctx.fillText(mn.toFixed(1)+this.unit,4,H-4);
+    this.series.forEach((s,i)=>{ctx.fillStyle=s.color;
+      ctx.fillText("■ "+s.name+" "+(this.data[i].at(-1)??0).toFixed(1),70+i*120,11);});
+  }
+}
+class Gauge {                           // 시그니처: 임계값(레드라인) 연동 아날로그 게이지
+  constructor(canvas,opt){ this.cv=canvas; this.o=opt; this.value=0; }
+  set redline(v){ this.o.redline=v; }
+  draw(v){
+    this.value=v;
+    const cv=this.cv,ctx=cv.getContext("2d"),W=cv.width,H=cv.height;
+    const cx=W/2, cy=H*0.56, R=Math.min(W,H)*0.42;
+    const A0=Math.PI*0.78, A1=Math.PI*2.22;           // 약 260° 스윕
+    const ang=x=>A0+(A1-A0)*Math.max(0,Math.min(1,(x-this.o.min)/(this.o.max-this.o.min)));
+    ctx.clearRect(0,0,W,H);
+    ctx.lineCap="round";
+    ctx.beginPath(); ctx.arc(cx,cy,R,A0,A1); ctx.strokeStyle="#242c38"; ctx.lineWidth=12; ctx.stroke();
+    if(this.o.redline<this.o.max){                    // 레드라인 구간
+      ctx.beginPath(); ctx.arc(cx,cy,R,ang(this.o.redline),A1);
+      ctx.strokeStyle="rgba(255,77,79,.55)"; ctx.lineWidth=12; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(cx,cy,R,A0,ang(v));      // 값 아크
+    ctx.strokeStyle = v>=this.o.redline ? "#FF4D4F" : "#F5A623"; ctx.lineWidth=12; ctx.stroke();
+    for(let i=0;i<=this.o.ticks;i++){                 // 눈금
+      const a=A0+(A1-A0)*i/this.o.ticks;
+      const x1=cx+Math.cos(a)*(R-16), y1=cy+Math.sin(a)*(R-16);
+      const x2=cx+Math.cos(a)*(R-24), y2=cy+Math.sin(a)*(R-24);
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
+      ctx.strokeStyle="#3a4452";ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle="#7C8694"; ctx.font="10px monospace"; ctx.textAlign="center";
+      const lv=this.o.min+(this.o.max-this.o.min)*i/this.o.ticks;
+      ctx.fillText(Math.round(lv/this.o.tickDiv), cx+Math.cos(a)*(R-36), cy+Math.sin(a)*(R-36)+3);
+    }
+    const a=ang(v);                                   // 바늘
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(a)*(R-20), cy+Math.sin(a)*(R-20));
+    ctx.strokeStyle="#E8EBF0"; ctx.lineWidth=3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,6,0,7); ctx.fillStyle="#E8EBF0"; ctx.fill();
+    ctx.fillStyle = v>=this.o.redline?"#FF4D4F":"#E8EBF0";
+    ctx.font="700 30px monospace"; ctx.textAlign="center";
+    ctx.fillText(Math.round(v*10)/10, cx, cy+R*0.78);
+    ctx.fillStyle="#7C8694"; ctx.font="11px monospace";
+    ctx.fillText(this.o.unit, cx, cy+R*0.78+16);
+  }
+}
+
+/* =====================================================================
+   App — 세션/뷰 전환/이벤트 배선
+===================================================================== */
+let TOKEN=null, ROLE=null;
+async function api(path,method="GET",body){
+  const r=await fetch(path,{method,headers:{"Content-Type":"application/json",
+    ...(TOKEN?{"X-Auth-Token":TOKEN}:{})}, body:body?JSON.stringify(body):undefined});
+  return r.json().catch(()=>({}));
+}
+
+const vstate=new VehicleState(), cells=new BatteryCellData();
+const thrCfg=new ThresholdConfig();
+const alerts=new AlertController(thrCfg);
+const analysis=new AnalysisEngine();
+let gSpeed,gRpm,chVolt,chCurr,chTemp;
+let playback=null;   // 재생 중이면 라이브 데이터 화면 반영 중단
+
+/* ---------- UC01: 로그인 ---------- */
+let regMode=false;
+$("pwToggle").onclick=()=>{const i=$("loginPw");
+  i.type=i.type==="password"?"text":"password";
+  $("pwToggle").textContent=i.type==="password"?"표시":"숨김";};
+$("regLink").onclick=()=>{regMode=!regMode;
+  $("regFields").classList.toggle("hidden",!regMode);
+  $("loginBtn").textContent=regMode?"REGISTER":"LOGIN";
+  $("regLink").textContent=regMode?"로그인으로 돌아가기":"Register here";
+  $("loginMsg").textContent="";};
+$("loginBtn").onclick=doLoginOrRegister;
+$("loginPw").addEventListener("keydown",e=>{if(e.key==="Enter")doLoginOrRegister();});
+async function doLoginOrRegister(){
+  const id=$("loginId").value.trim(), pw=$("loginPw").value;
+  if(regMode){
+    const r=await api("/api/register","POST",{id,pw,role:$("regRole").value});
+    $("loginMsg").style.color=r.ok?"var(--green)":"var(--red)";
+    $("loginMsg").textContent=r.msg||"오류"; if(r.ok)$("regLink").onclick();
+    return;
+  }
+  const r=await api("/api/login","POST",{id,pw});
+  if(!r.token){ $("loginMsg").style.color="var(--red)";
+    $("loginMsg").textContent=r.error||"서버 연결 오류 — 잠시 후 다시 시도하세요"; // UC01 확장 3a/3b
+    $("loginPw").value=""; return; }
+  TOKEN=r.token; ROLE=r.role;
+  enterApp(r.id);
+}
+$("logoutBtn").onclick=async()=>{ await api("/api/logout","POST",{}); location.reload(); };
+
+/* ---------- 메인 진입 ---------- */
+const TABS={ dashboard:"DASHBOARD", telemetry:"TELEMETRY", battery:"BATTERY",
+             control:"CONTROL", logs:"LOGS" };
+function enterApp(userId){
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("stUser").textContent=`${userId} · ${ROLE.toUpperCase()}`;
+  const allowed = ROLE==="engineer" ? Object.keys(TABS) : ["dashboard"];
+  $("tabs").innerHTML="";
+  allowed.forEach((k,i)=>{
+    const b=document.createElement("button"); b.textContent=TABS[k];
+    b.onclick=()=>showTab(k,b);
+    if(i===0){b.classList.add("active");}
+    $("tabs").appendChild(b);
+  });
+  showTab("dashboard",$("tabs").firstChild);
+  initGauges(); initCharts(); loadThresholds(); initControl(); refreshLogs();
+  connector.connect(); startLatencyProbe(); pollStatus();
+}
+function showTab(key,btn){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  Object.keys(TABS).forEach(k=>$("view-"+k)?.classList.toggle("hidden",k!==key));
+}
+
+/* ---------- 게이지/차트 초기화 ---------- */
+function initGauges(){
+  gSpeed=new Gauge($("gSpeed"),{min:0,max:160,ticks:8,tickDiv:1,unit:"km/h",redline:thrCfg.get("maxSpeed")??110});
+  gRpm  =new Gauge($("gRpm"),  {min:0,max:8000,ticks:8,tickDiv:1000,unit:"RPM x1000",redline:thrCfg.get("maxRpm")??5200});
+  gSpeed.draw(0); gRpm.draw(0);
+}
+function initCharts(){
+  chVolt=new LineChart($("chVolt"),[{name:"Pack V",color:"#6FD3E7"}],"V");
+  chCurr=new LineChart($("chCurr"),[{name:"Current",color:"#F5A623"}],"A");
+  chTemp=new LineChart($("chTemp"),[{name:"Motor",color:"#FF4D4F"},{name:"Inverter",color:"#39D98A"}],"℃");
+}
+
+/* ---------- 실시간 수신 (UC02/03) ---------- */
+const connector=new SimulatorConnector(onSnapshot,ok=>{
+  $("connLost").classList.toggle("hidden",ok);   // UC02 확장 1a
+});
+function onSnapshot(snap){
+  $("stState").textContent="STATE: "+snap.state;
+  $("stState").className="tag "+(snap.state==="TELEMETRY_STREAMING"?"ok":
+                                 snap.state==="EMERGENCY_HALT"?"bad":"warn");
+  const t=TelemetryParser.parseCANPacket(snap.raw);
+  const c=TelemetryParser.parseCANPacket(snap.raw_cells);
+  if(t && TelemetryParser.sane(t) && !playback){
+    t.ts=snap.ts; vstate.updateState(t);
+    if(c) cells.updateCellData(c.cells,c.cellTemp);
+    renderAll(snap.raw);
+  }
+}
+function renderAll(rawHex){
+  // 대시보드
+  gSpeed.draw(vstate.speed); gRpm.draw(vstate.rpm);
+  $("socBar").style.height=vstate.batterySOC+"%";
+  $("socBar").style.background = vstate.batterySOC<20
+    ? "linear-gradient(180deg,var(--red),#7a1f1f)"
+    : "linear-gradient(180deg,var(--green),#1f7a4e)";
+  $("socPct").textContent=vstate.batterySOC.toFixed(1)+"%";
+  $("lampMode").textContent=MODE_NAMES[vstate.currentMode]||"--";
+  $("lampMode").classList.add("on");
+  $("lampHead").classList.toggle("on",!!(vstate.lights&1));
+  $("lampHigh").classList.toggle("on",!!(vstate.lights&2));
+  $("lampHaz").classList.toggle("on",!!(vstate.lights&4));
+  $("dashKv").innerHTML=[["ODO",(vstate.odometer/1000).toFixed(2)+" km"],
+    ["PACK V",vstate.voltage.toFixed(1)+" V"],["CURRENT",vstate.current.toFixed(1)+" A"],
+    ["MOTOR T",vstate.motorTemp.toFixed(1)+" ℃"]]
+    .map(([k,v])=>`<div class="kv"><span>${k}</span><b>${v}</b></div>`).join("");
+
+  // 텔레메트리 (엔지니어)
+  if(ROLE==="engineer"){
+    chVolt.push([vstate.voltage]); chCurr.push([vstate.current]);
+    chTemp.push([vstate.motorTemp,vstate.inverterTemp]);
+    const rows=[["BMS-PACK-V",vstate.voltage.toFixed(1)+" V",vstate.voltage>36?"OK":"LOW"],
+      ["BMS-CURR",vstate.current.toFixed(1)+" A","OK"],
+      ["MOTOR-TEMP",vstate.motorTemp.toFixed(1)+" ℃",vstate.motorTemp>thrCfg.get("maxMotorTemp")?"OVER":"OK"],
+      ["INV-TEMP",vstate.inverterTemp.toFixed(1)+" ℃",vstate.inverterTemp>thrCfg.get("maxInverterTemp")?"OVER":"OK"],
+      ["MOTOR-RPM",vstate.rpm+" rpm",vstate.rpm>thrCfg.get("maxRpm")?"OVER":"OK"],
+      ["VEH-SPEED",vstate.speed.toFixed(1)+" km/h",vstate.speed>thrCfg.get("maxSpeed")?"OVER":"OK"],
+      ["BMS-CELL-Δ",cells.maxVoltageDelta.toFixed(0)+" mV",cells.maxVoltageDelta>thrCfg.get("maxCellDelta")?"OVER":"OK"]];
+    $("telTable").innerHTML=rows.map(([d,v,s])=>
+      `<tr><td>${d}</td><td>${v}</td><td class="${s==="OK"?"ok":"bad"}">${s}</td></tr>`).join("");
+    if(rawHex) $("rawFrame").textContent=rawHex;
+
+    const e=analysis.calculateEfficiency(vstate);     // UC10
+    $("effBox").innerHTML=[
+      ["전비",e.idle?"정차 중 에너지 대기":(e.eff?e.eff.toFixed(2)+" km/kWh":"--")],
+      ["소비 전력",(e.power/1000).toFixed(2)+" kW"],
+      ["누적 에너지",e.energy.toFixed(3)+" kWh"],
+      ["주행 가능 거리",e.range?e.range.toFixed(1)+" km":"--"]]
+      .map(([k,v])=>`<div class="kv"><span>${k}</span><b>${v}</b></div>`).join("");
+    renderCells();
+  }
+  runAlerts();      // UC08
+}
+
+/* ---------- UC09: 배터리 셀 분석 ---------- */
+function renderCells(){
+  const cv=$("chCells"); if(!cv) return;
+  const dpr=devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  if(cv.width!==W*dpr){cv.width=W*dpr;cv.height=H*dpr;}
+  const ctx=cv.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  const vs=cells.cellVoltages; if(!vs.length) return;
+  const mn=3000, mx=4250, bw=W/vs.length;
+  const bal=analysis.analyzeCellBalance(cells,thrCfg);
+  vs.forEach((v,i)=>{
+    const h=(v-mn)/(mx-mn)*(H-26);
+    const missing=v<100;                              // 확장 2a — 결측 셀 회색
+    ctx.fillStyle = missing? "#4a5260" : bal.abnormal.includes(i)? "#FF4D4F" : "#6FD3E7";
+    ctx.fillRect(i*bw+6, H-20-h, bw-12, h);
+    ctx.fillStyle="#7C8694"; ctx.font="10px monospace"; ctx.textAlign="center";
+    ctx.fillText("C"+(i+1), i*bw+bw/2, H-6);
+    ctx.fillStyle="#E8EBF0";
+    ctx.fillText(missing?"--":(v/1000).toFixed(2), i*bw+bw/2, H-26-h);
+  });
+  const okDelta=cells.maxVoltageDelta<=thrCfg.get("maxCellDelta");
+  $("cellKv").innerHTML=[
+    ["최대 전압",(Math.max(...vs)/1000).toFixed(3)+" V"],
+    ["최소 전압",(Math.min(...vs)/1000).toFixed(3)+" V"],
+    [`편차 Δ`,`<span style="color:${okDelta?'var(--green)':'var(--red)'}">${cells.maxVoltageDelta.toFixed(0)} mV ${okDelta?'(정상)':'(BMS 정밀 점검 필요)'}</span>`],
+    ["셀 온도",cells.cellTemp.toFixed(1)+" ℃"]]
+    .map(([k,v])=>`<div class="kv"><span>${k}</span><b>${v}</b></div>`).join("");
+}
+
+/* ---------- UC08: 경고 ---------- */
+function runAlerts(){
+  const active=alerts.checkThresholds(vstate,cells);
+  const pop=$("alertPopup");
+  if(active.length){
+    $("alertList").innerHTML=active.map(a=>
+      `<li>· ${a.label}: <b style="color:var(--red)">${a.val}${a.unit}</b> (한계 ${a.lim}${a.unit})</li>`).join("");
+    pop.classList.remove("hidden");
+  } else pop.classList.add("hidden");
+  $("alertLog").innerHTML=alerts.history.slice(0,40).map(h=>
+    `<tr><td>${h.time}</td><td>${h.label}</td><td class="bad">${h.val}${h.unit}</td><td>${h.lim}${h.unit}</td></tr>`).join("");
+}
+$("alertAck").onclick=()=>{ alerts.acknowledge(); $("alertPopup").classList.add("hidden"); };
+
+/* ---------- UC12: 네트워크 지연 측정 ---------- */
+function startLatencyProbe(){
+  setInterval(async()=>{
+    const t0=performance.now();
+    try{
+      await fetch("/api/ping",{cache:"no-store"});
+      const rtt=performance.now()-t0;
+      const el=$("stLatency");
+      el.textContent=`RTT: ${rtt.toFixed(0)} ms`;
+      el.className="tag "+(rtt<80?"ok":rtt<300?"warn":"bad");
+    }catch{ $("stLatency").textContent="RTT: LOSS"; $("stLatency").className="tag bad"; }
+  },1000);
+}
+async function pollStatus(){
+  setInterval(async()=>{
+    const s=await api("/api/status");
+    if(s.logging!==undefined){
+      $("stRec").classList.toggle("hidden",!s.logging);
+      $("logToggleBtn").textContent=s.logging?"LOG STOP":"LOG START";
+    }
+  },2000);
+}
+
+/* ---------- UC11: 임계값 설정 ---------- */
+const THR_META={ maxSpeed:["최대 속도 (km/h)",10,300], maxRpm:["최대 RPM",500,20000],
+  maxMotorTemp:["모터 온도 한계 (℃)",30,200], maxInverterTemp:["인버터 온도 한계 (℃)",30,200],
+  minSoc:["배터리 부족 경고 (%)",0,90], minCellVoltage:["셀 저전압 (mV)",2500,4200],
+  maxCellDelta:["셀 편차 한계 (mV)",5,500] };
+async function loadThresholds(){
+  thrCfg.setAll(await api("/api/thresholds"));
+  $("thrRows").innerHTML=Object.entries(THR_META).map(([k,[label,lo,hi]])=>`
+    <div class="slider-row"><span>${label}</span>
+      <input type="range" id="rg_${k}" min="${lo}" max="${hi}" value="${thrCfg.get(k)}">
+      <input type="number" id="nm_${k}" min="${lo}" max="${hi}" value="${thrCfg.get(k)}"></div>`).join("");
+  Object.keys(THR_META).forEach(k=>{
+    $("rg_"+k).oninput=e=>{$("nm_"+k).value=e.target.value; livePreviewThreshold(k,+e.target.value);};
+    $("nm_"+k).oninput=e=>{$("rg_"+k).value=e.target.value; livePreviewThreshold(k,+e.target.value);};
+  });
+  applyRedlines();
+}
+function livePreviewThreshold(k,v){          // 슬라이더 ↔ 게이지 레드라인 실시간 연동
+  if(k==="maxSpeed"&&gSpeed){gSpeed.redline=v;}
+  if(k==="maxRpm"&&gRpm){gRpm.redline=v;}
+}
+function applyRedlines(){
+  if(gSpeed)gSpeed.redline=thrCfg.get("maxSpeed");
+  if(gRpm)gRpm.redline=thrCfg.get("maxRpm");
+}
+$("thrSave").onclick=async()=>{
+  const body={}; Object.keys(THR_META).forEach(k=>body[k]=+$("nm_"+k).value);
+  const r=await api("/api/thresholds","POST",body);
+  const m=$("thrMsg");
+  if(r.ok){ thrCfg.setAll(r.thresholds); applyRedlines();
+    m.style.color="var(--green)"; m.textContent="설정이 저장되어 모니터링 로직에 즉시 반영되었습니다.";
+  } else { m.style.color="var(--red)"; m.textContent=r.msg||"저장 실패 — 기존 설정이 유지됩니다."; } // 확장 6b
+  setTimeout(()=>m.textContent="",4000);
+};
+
+/* ---------- UC05: 제어 패널 ---------- */
+let lightsBits=0;
+function initControl(){
+  api("/api/status").then(s=>{
+    const sel=$("scenarioSel");
+    sel.innerHTML=Object.entries(s.engine.scenarios)
+      .map(([k,v])=>`<option value="${k}">${v}</option>`).join("");
+    sel.value=s.engine.scenario;
+  });
+  const send=async(cmd,value,label)=>{
+    const note=$("cmdNote");
+    note.textContent=label+" 명령 전송 중…";
+    const r=await connector.sendCommand(cmd,value);
+    if(r.ack){ note.textContent=label+" — 수행 완료 (ACK)"; }
+    else { note.innerHTML=`<span style="color:var(--red)">명령 수행 거부: ${r.reason||r.error||"응답 시간 초과"}</span>`; } // 확장 3a/4b
+    return r;
+  };
+  $("btnEstop").onclick=()=>send("emergency_stop",null,"EMERGENCY STOP");
+  $("btnReset").onclick=()=>send("reset",null,"RESET");
+  document.querySelectorAll("[data-mode]").forEach(b=>{
+    b.onclick=async()=>{ const r=await send("set_mode",+b.dataset.mode,"주행 모드 변경");
+      if(r.ack){document.querySelectorAll("[data-mode]").forEach(x=>x.classList.remove("active"));
+        b.classList.add("active");} };
+  });
+  const lightBtn=(id,bit)=>{ $(id).onclick=async()=>{
+    lightsBits^=bit;
+    const r=await send("set_lights",lightsBits,"램프 제어");
+    if(r.ack)$(id).classList.toggle("active",!!(lightsBits&bit));
+    else lightsBits^=bit; };};
+  lightBtn("btnHead",1); lightBtn("btnHigh",2); lightBtn("btnHaz",4);
+  $("thrSlider").oninput=e=>send("set_throttle",+e.target.value/100,"수동 스로틀");
+  $("thrAuto").onclick=()=>{$("thrSlider").value=0;send("set_throttle",null,"자동(시나리오) 전환");};
+  $("scenarioLoad").onclick=()=>send("load_scenario",$("scenarioSel").value,"시나리오 로드");
+}
+
+/* ---------- UC06: 로깅 / UC13: 리포트 ---------- */
+$("logToggleBtn").onclick=async()=>{
+  const s=await api("/api/status");
+  if(s.logging){
+    const r=await api("/api/log/stop","POST",{});
+    toast(`로그 저장 완료: ${r.result?.file} (${r.result?.rows}행)`);
+  } else {
+    const r=await api("/api/log/start","POST",{});
+    toast(`로깅 시작: ${r.file}`);
+  }
+  refreshLogs();
+};
+function toast(msg){ const d=document.createElement("div"); d.className="toast";
+  d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),3500); }
+
+async function refreshLogs(){
+  if(ROLE!=="engineer") return;
+  const r=await api("/api/logs");
+  $("logList").innerHTML=(r.files||[]).map(f=>`
+    <div class="log-row"><span class="name">${f.name}</span>
+      <span>${(f.size/1024).toFixed(1)} KB</span>
+      <button class="mini" onclick="startPlayback('${f.name}')">재생</button>
+      <button class="mini" onclick="exportReport('${f.name}')">리포트 PDF</button>
+      <button class="mini" onclick="exportCsv('${f.name}')">CSV</button></div>`).join("")
+    || `<div class="note">저장된 로그가 없습니다. 텔레메트리 탭에서 LOG START로 기록을 시작하세요.</div>`;
+}
+window.exportReport=async name=>{
+  const r=await api("/api/logs/"+name);
+  if(!r.rows){toast("데이터 로드 실패 — 다른 로그를 선택하세요");return;}  // UC13 확장 2a
+  ReportExporter.generatePDF(name,r.summary,r.rows);
+};
+window.exportCsv=async name=>{
+  const r=await api("/api/logs/"+name);
+  if(r.rows) ReportExporter.downloadCSV(name,r.rows);
+};
+
+/* ---------- UC07: 재생 ---------- */
+class PlaybackController {
+  constructor(rows){ this.rows=rows; this.idx=0; this.playing=false; this.speed=1; this.timer=null;
+    this.t0=+rows[0].time; this.tEnd=+rows.at(-1).time; }
+  play(){ if(this.playing)return; this.playing=true; this._step(); }
+  pause(){ this.playing=false; clearTimeout(this.timer); }
+  seek(frac){ this.idx=Math.floor(frac*(this.rows.length-1)); this._apply(); }
+  _step(){
+    if(!this.playing) return;
+    this._apply();
+    if(this.idx>=this.rows.length-1){ this.pause(); $("pbPlay").textContent="▶"; return; } // EOF
+    const dt=Math.max(0.02,(+this.rows[this.idx+1].time - +this.rows[this.idx].time)/this.speed);
+    this.idx++;
+    this.timer=setTimeout(()=>this._step(), dt*1000);
+  }
+  _apply(){
+    const r=this.rows[this.idx];
+    vstate.updateState({speed:+r.speed,rpm:+r.rpm,batterySOC:+r.soc,voltage:+r.voltage,
+      current:+r.current,motorTemp:+r.motor_temp,inverterTemp:+r.inverter_temp,
+      currentMode:+r.mode,odometer:+r.odometer_m,ts:+r.time});
+    renderAll(null);
+    const el=+r.time-this.t0;
+    $("pbTime").textContent=el.toFixed(1)+"s / "+(this.tEnd-this.t0).toFixed(1)+"s";
+    $("pbSeek").value=this.idx/(this.rows.length-1)*100;
+  }
+}
+window.startPlayback=async name=>{
+  const r=await api("/api/logs/"+name);
+  if(!r.rows||!r.rows.length){ toast("유효하지 않은 파일 형식입니다"); return; } // UC07 확장 2a
+  playback=new PlaybackController(r.rows);
+  $("playbackBanner").classList.remove("hidden");
+  $("pbBar").classList.remove("hidden");
+  $("pbInfo").textContent=`${name} — ${r.rows.length}행, ${(r.summary?.duration_s??0)}초`;
+  playback.play(); $("pbPlay").textContent="⏸";
+};
+$("pbPlay").onclick=()=>{ if(!playback)return;
+  if(playback.playing){playback.pause();$("pbPlay").textContent="▶";}
+  else{playback.play();$("pbPlay").textContent="⏸";} };
+$("pbSpeed").onchange=e=>{ if(playback)playback.speed=+e.target.value; };
+$("pbSeek").oninput=e=>{ if(playback){playback.pause();$("pbPlay").textContent="▶";playback.seek(+e.target.value/100);} };
+$("pbExit").onclick=()=>{ if(playback)playback.pause(); playback=null;
+  $("playbackBanner").classList.add("hidden"); $("pbBar").classList.add("hidden");
+  $("pbInfo").textContent="재생할 로그 파일을 위 목록에서 선택하세요."; };
+</script>
+</body>
+</html>

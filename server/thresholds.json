@@ -1,0 +1,9 @@
+{
+  "maxSpeed": 120.0,
+  "maxRpm": 5200,
+  "maxMotorTemp": 95.0,
+  "maxInverterTemp": 85.0,
+  "minSoc": 15.0,
+  "minCellVoltage": 3050,
+  "maxCellDelta": 60.0
+}
