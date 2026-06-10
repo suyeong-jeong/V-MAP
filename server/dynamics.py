@@ -74,7 +74,7 @@ class BatteryPack:
         self.temp = 26.0  # 팩 온도 (℃)
         # 셀 별 고유 편차(불균형 모사)
         self._cell_bias = [random.uniform(-12, 12) for _ in range(self.CELL_COUNT)]
-        self._cell_bias[7] = -38.0  # 7번 셀을 의도적으로 약한 셀로 설정 (분석 시연용)
+        self._cell_bias[6] = -38.0  # 7번 셀(C7)을 의도적으로 약한 셀로 설정 (분석 시연용)
 
     def drain(self, power_w: float, dt: float):
         """소모 전력에 따른 배터리 잔량 감소 및 발열."""
@@ -82,6 +82,9 @@ class BatteryPack:
         self.soc = max(0.0, self.soc - used_wh / self.CAPACITY_WH * 100.0)
         # 전류량에 비례한 발열, 자연 냉각
         self.temp += (power_w / 9000.0) * dt - (self.temp - 24.0) * 0.012 * dt
+        if self.soc <= 0.5:  # 상시 가동 데모 — 방전 시 충전 완료 팩 교체 모사
+            self.soc = 100.0
+            self.temp = 26.0
 
     def pack_voltage(self) -> float:
         """SOC 기반 팩 전압 (3.0V ~ 4.2V/셀 선형 근사)."""
